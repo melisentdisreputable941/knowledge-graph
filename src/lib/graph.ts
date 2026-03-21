@@ -2,8 +2,21 @@ import Graph from 'graphology';
 import louvain from 'graphology-communities-louvain';
 import betweennessCentrality from 'graphology-metrics/centrality/betweenness.js';
 import pagerank from 'graphology-metrics/centrality/pagerank.js';
+import { degreeCentrality } from 'graphology-metrics/centrality/degree.js';
 import type { Store } from './store.js';
 import type { PathResult, SubgraphResult, Community } from './types.js';
+
+/**
+ * Try PageRank first, fall back to degree centrality if it fails to converge
+ * (common with disconnected components).
+ */
+function safeRank(graph: Graph): Record<string, number> {
+  try {
+    return pagerank(graph, { maxIterations: 1000, tolerance: 1e-4 });
+  } catch {
+    return degreeCentrality(graph);
+  }
+}
 
 interface NeighborInfo {
   id: string;
@@ -180,7 +193,7 @@ export class KnowledgeGraph {
       communityMap.set(communityId, existing);
     }
 
-    const pr = pagerank(undirected);
+    const pr = safeRank(undirected);
     const communities: Community[] = [];
 
     for (const [id, nodeIds] of communityMap) {
@@ -229,7 +242,7 @@ export class KnowledgeGraph {
     communityNodeIds?: string[],
   ): Array<{ id: string; title: string; score: number }> {
     const undirected = this.toUndirected();
-    const pr = pagerank(undirected);
+    const pr = safeRank(undirected);
     let entries = Object.entries(pr);
     if (communityNodeIds) {
       const allowed = new Set(communityNodeIds);

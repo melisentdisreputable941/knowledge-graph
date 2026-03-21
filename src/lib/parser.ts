@@ -27,7 +27,19 @@ export async function parseVault(vaultPath: string): Promise<ParseResult> {
   for (const relPath of mdPaths) {
     const absPath = join(vaultPath, relPath);
     const raw = await readFile(absPath, 'utf-8');
-    const { data: fm, content } = matter(raw);
+
+    let fm: Record<string, unknown>;
+    let content: string;
+    try {
+      const parsed = matter(raw);
+      fm = parsed.data;
+      content = parsed.content;
+    } catch {
+      // Malformed YAML frontmatter — treat entire file as content
+      console.warn(`Malformed frontmatter in ${relPath}, treating as plain markdown`);
+      fm = {};
+      content = raw;
+    }
 
     const title = (fm.title as string)
       ?? basename(relPath, '.md');
