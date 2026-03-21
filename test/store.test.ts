@@ -96,4 +96,42 @@ describe('Store', () => {
     store.upsertNode({ id: 'b.md', title: 'B', content: '', frontmatter: {} });
     expect(store.allNodeIds()).toEqual(expect.arrayContaining(['a.md', 'b.md']));
   });
+
+  it('full-text search returns snippets', () => {
+    store.upsertNode({
+      id: 'test.md',
+      title: 'Widget Theory',
+      content: 'A framework for understanding component interactions in complex distributed systems',
+      frontmatter: {},
+    });
+    const results = store.searchFullText('framework component');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].excerpt).not.toBe('');
+    expect(results[0].excerpt).toContain('framework');
+  });
+
+  it('counts edges for a node', () => {
+    store.upsertNode({ id: 'a.md', title: 'A', content: '', frontmatter: {} });
+    store.upsertNode({ id: 'b.md', title: 'B', content: '', frontmatter: {} });
+    store.upsertNode({ id: 'c.md', title: 'C', content: '', frontmatter: {} });
+    store.insertEdge({ sourceId: 'a.md', targetId: 'b.md', context: 'link 1' });
+    store.insertEdge({ sourceId: 'a.md', targetId: 'c.md', context: 'link 2' });
+    store.insertEdge({ sourceId: 'b.md', targetId: 'a.md', context: 'backlink' });
+    expect(store.countEdgesFrom('a.md')).toBe(2);
+    expect(store.countEdgesTo('a.md')).toBe(1);
+  });
+
+  it('gets edge summaries (target titles without context)', () => {
+    store.upsertNode({ id: 'a.md', title: 'Alpha', content: '', frontmatter: {} });
+    store.upsertNode({ id: 'b.md', title: 'Beta', content: '', frontmatter: {} });
+    store.upsertNode({ id: 'c.md', title: 'Gamma', content: '', frontmatter: {} });
+    store.insertEdge({ sourceId: 'a.md', targetId: 'b.md', context: 'long paragraph...' });
+    store.insertEdge({ sourceId: 'c.md', targetId: 'a.md', context: 'another paragraph...' });
+    const outSummary = store.getEdgeSummariesFrom('a.md');
+    expect(outSummary).toHaveLength(1);
+    expect(outSummary[0].title).toBe('Beta');
+    const inSummary = store.getEdgeSummariesTo('a.md');
+    expect(inSummary).toHaveLength(1);
+    expect(inSummary[0].title).toBe('Gamma');
+  });
 });

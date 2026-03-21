@@ -72,13 +72,36 @@ program
 program
   .command('node <name>')
   .description('Get a node with its content and connections')
-  .action((name) => {
+  .option('--full', 'Return full content and edge context (default is brief)')
+  .option('--max-content <n>', 'Truncate content to N chars in full mode', '2000')
+  .action((name, opts) => {
     const store = getStore();
     const nodeId = requireSingleMatch(name, store);
     const node = store.getNode(nodeId);
-    const outgoing = store.getEdgesFrom(nodeId);
-    const incoming = store.getEdgesTo(nodeId);
-    output({ ...node, outgoing, incoming });
+    if (!node) { console.error(`Node not found`); process.exit(1); }
+
+    if (opts.full) {
+      const limit = parseInt(opts.maxContent);
+      const truncatedContent = node.content.length > limit
+        ? node.content.slice(0, limit) + `\n\n... [truncated, ${node.content.length} chars total]`
+        : node.content;
+      const outgoing = store.getEdgesFrom(nodeId).map(e => ({
+        ...e, context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
+      }));
+      const incoming = store.getEdgesTo(nodeId).map(e => ({
+        ...e, context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
+      }));
+      output({ ...node, content: truncatedContent, outgoing, incoming });
+    } else {
+      const outgoing = store.getEdgeSummariesFrom(nodeId);
+      const incoming = store.getEdgeSummariesTo(nodeId);
+      output({
+        id: node.id, title: node.title, frontmatter: node.frontmatter,
+        outgoingCount: store.countEdgesFrom(nodeId),
+        incomingCount: store.countEdgesTo(nodeId),
+        outgoing, incoming,
+      });
+    }
     store.close();
   });
 

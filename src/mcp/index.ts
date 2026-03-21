@@ -46,14 +46,46 @@ server.tool(
 
 server.tool(
   'kg_node',
-  'Get a node with its content and connections',
-  { name: z.string().describe('Node name (fuzzy matched)') },
-  async ({ name }) => {
+  'Get a node. Brief mode (default) returns metadata + connection titles. Full mode returns content + edge context.',
+  {
+    name: z.string().describe('Node name (fuzzy matched)'),
+    brief: z.boolean().optional().describe('Brief mode: metadata + connection titles only (default true)'),
+    maxContentLength: z.number().optional().describe('Truncate content to N chars in full mode (default 2000)'),
+  },
+  async ({ name, brief, maxContentLength }) => {
     const nodeId = requireMatch(name);
     const node = store.getNode(nodeId);
-    const outgoing = store.getEdgesFrom(nodeId);
-    const incoming = store.getEdgesTo(nodeId);
-    return { content: [{ type: 'text', text: JSON.stringify({ ...node, outgoing, incoming }, null, 2) }] };
+    if (!node) throw new Error(`Node "${name}" not found`);
+    const useBrief = brief ?? true;
+
+    if (useBrief) {
+      const outgoing = store.getEdgeSummariesFrom(nodeId);
+      const incoming = store.getEdgeSummariesTo(nodeId);
+      const result = {
+        id: node.id,
+        title: node.title,
+        frontmatter: node.frontmatter,
+        outgoingCount: store.countEdgesFrom(nodeId),
+        incomingCount: store.countEdgesTo(nodeId),
+        outgoing,
+        incoming,
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+
+    const limit = maxContentLength ?? 2000;
+    const truncatedContent = node.content.length > limit
+      ? node.content.slice(0, limit) + `\n\n... [truncated, ${node.content.length} chars total]`
+      : node.content;
+    const outgoing = store.getEdgesFrom(nodeId).map(e => ({
+      ...e,
+      context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
+    }));
+    const incoming = store.getEdgesTo(nodeId).map(e => ({
+      ...e,
+      context: e.context.length > 200 ? e.context.slice(0, 200) + '...' : e.context,
+    }));
+    return { content: [{ type: 'text', text: JSON.stringify({ ...node, content: truncatedContent, outgoing, incoming }, null, 2) }] };
   }
 );
 

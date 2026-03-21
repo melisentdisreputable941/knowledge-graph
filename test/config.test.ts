@@ -28,6 +28,7 @@ describe('resolveConfig', () => {
   it('defaults data dir to XDG_DATA_HOME/knowledge-graph', () => {
     process.env.KG_VAULT_PATH = '/tmp/vault';
     process.env.XDG_DATA_HOME = '/tmp/xdg';
+    delete process.env.KG_DATA_DIR;
     const config = resolveConfig({});
     expect(config.dataDir).toBe('/tmp/xdg/knowledge-graph');
   });

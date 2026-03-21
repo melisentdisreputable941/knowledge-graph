@@ -129,6 +129,44 @@ export class Store {
     }));
   }
 
+  countEdgesFrom(nodeId: string): number {
+    const row = this.db.prepare(
+      'SELECT COUNT(*) as cnt FROM edges WHERE source_id = ?'
+    ).get(nodeId) as { cnt: number };
+    return row.cnt;
+  }
+
+  countEdgesTo(nodeId: string): number {
+    const row = this.db.prepare(
+      'SELECT COUNT(*) as cnt FROM edges WHERE target_id = ?'
+    ).get(nodeId) as { cnt: number };
+    return row.cnt;
+  }
+
+  getEdgeSummariesFrom(nodeId: string): Array<{ nodeId: string; title: string }> {
+    return this.db.prepare(`
+      SELECT DISTINCT e.target_id, n.title
+      FROM edges e
+      LEFT JOIN nodes n ON n.id = e.target_id
+      WHERE e.source_id = ?
+    `).all(nodeId).map((r: any) => ({
+      nodeId: r.target_id,
+      title: r.title ?? r.target_id,
+    }));
+  }
+
+  getEdgeSummariesTo(nodeId: string): Array<{ nodeId: string; title: string }> {
+    return this.db.prepare(`
+      SELECT DISTINCT e.source_id, n.title
+      FROM edges e
+      LEFT JOIN nodes n ON n.id = e.source_id
+      WHERE e.target_id = ?
+    `).all(nodeId).map((r: any) => ({
+      nodeId: r.source_id,
+      title: r.title ?? r.source_id,
+    }));
+  }
+
   deleteNode(id: string): void {
     // FTS5 delete requires actual old values, not empty strings
     const row = this.db.prepare(
@@ -154,7 +192,8 @@ export class Store {
 
   searchFullText(query: string): SearchResult[] {
     return this.db.prepare(`
-      SELECT n.id, n.title, rank
+      SELECT n.id, n.title, rank,
+        snippet(nodes_fts, 1, '>>>', '<<<', '...', 40) as excerpt
       FROM nodes_fts f
       JOIN nodes n ON n.rowid = f.rowid
       WHERE nodes_fts MATCH ?
@@ -164,7 +203,7 @@ export class Store {
       nodeId: r.id,
       title: r.title,
       score: -r.rank,
-      excerpt: '',
+      excerpt: r.excerpt ?? '',
     }));
   }
 
@@ -180,7 +219,7 @@ export class Store {
 
   searchVector(embedding: Float32Array, limit = 20): SearchResult[] {
     return this.db.prepare(`
-      SELECT v.rowid, v.distance, n.id, n.title
+      SELECT v.rowid, v.distance, n.id, n.title, n.content
       FROM nodes_vec v
       JOIN nodes n ON n.rowid = v.rowid
       WHERE embedding MATCH ? AND k = ?
@@ -189,7 +228,7 @@ export class Store {
       nodeId: r.id,
       title: r.title,
       score: 1 - r.distance,
-      excerpt: '',
+      excerpt: firstParagraph(r.content ?? '', 200),
     }));
   }
 
@@ -239,4 +278,11 @@ export class Store {
   close(): void {
     this.db.close();
   }
+}
+
+function firstParagraph(content: string, maxLen: number): string {
+  const para = content.split(/\n\n+/).find(p => p.trim().length > 0 && !p.startsWith('#'));
+  if (!para) return '';
+  const trimmed = para.trim();
+  return trimmed.length > maxLen ? trimmed.slice(0, maxLen) + '...' : trimmed;
 }
